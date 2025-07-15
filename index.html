@@ -392,10 +392,7 @@
                     <span class="countdown-number" id="minutes">--</span>
                     <div class="countdown-label">минут</div>
                 </div>
-                <div class="countdown-item">
-                    <span class="countdown-number" id="seconds">--</span>
-                    <div class="countdown-label">секунд</div>
-                </div>
+               
             </div>
         </div>
 
@@ -748,7 +745,6 @@
             }
         }
         function updateCountdown() {
-    // Устанавливаем дату мероприятия - 15 августа 2025
     const eventDate = new Date(2025, 7, 15, 0, 0, 0); // месяц 7 = август
     const now = new Date();
     const difference = eventDate.getTime() - now.getTime();
@@ -757,22 +753,23 @@
         const days = Math.floor(difference / (1000 * 60 * 60 * 24));
         const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+        // секунды удалены
         
         document.getElementById('days').textContent = days.toString().padStart(2, '0');
         document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
         document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
-        document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
+        // строка с секундами удалена
         
         document.getElementById('days-left').textContent = days;
     } else {
         document.getElementById('days').textContent = '00';
         document.getElementById('hours').textContent = '00';
         document.getElementById('minutes').textContent = '00';
-        document.getElementById('seconds').textContent = '00';
+        // строка с секундами удалена
         document.getElementById('days-left').textContent = 0;
     }
 }
+
 
 
         
