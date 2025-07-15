@@ -6,8 +6,11 @@
     <title>🎮 Mind Board - Park till Park Team Progress</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&display=swap');
         
@@ -342,6 +345,22 @@
             display: none;
         }
 
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(46, 204, 113, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            z-index: 1000;
+        }
+
+        .connection-status.disconnected {
+            background: rgba(231, 76, 60, 0.9);
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -371,6 +390,10 @@
     </style>
 </head>
 <body>
+    <div class="connection-status" id="connection-status">
+        🔄 Подключение...
+    </div>
+
     <div class="container">
         <div class="header">
             <h1 class="minecraft-font text-4xl mb-4">🎮 PARK TILL PARK</h1>
@@ -394,7 +417,6 @@
                     <span class="countdown-number" id="minutes">--</span>
                     <div class="countdown-label">минут</div>
                 </div>
-               
             </div>
         </div>
 
@@ -532,8 +554,8 @@
     </div>
 
     <script>
-        // Данные задач
-        const tasks = [
+        // Данные задач по умолчанию
+        const defaultTasks = [
             // Фаза 1
             { id: 1, title: "Лого, Афиша", assignee: "kostya", phase: 1, completed: false },
             { id: 2, title: "Флаеры", assignee: "kostya", phase: 1, completed: false },
@@ -570,16 +592,107 @@
             { id: 27, title: "Финальные штрихи", assignee: "ksenia", phase: 4, completed: false }
         ];
 
-        // Инициализация
-        let savedTasks = JSON.parse(localStorage.getItem('parkTillParkTasks')) || tasks;
+        // Переменные для работы с данными
+        let savedTasks = [];
+        let database = null;
+        let tasksRef = null;
 
+        // ВАЖНО: Замените на ваши настройки Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBOqKZHRzJPwpDxoLTlZJD6MgJAyaKLtTY",
+            authDomain: "park-till-park-tasks.firebaseapp.com",
+            databaseURL: "https://park-till-park-tasks-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "park-till-park-tasks",
+            storageBucket: "park-till-park-tasks.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef123456"
+        };
+
+        // Функция для работы без Firebase (fallback)
+        function initializeWithoutFirebase() {
+            console.log('Работаем без Firebase - используем localStorage');
+            savedTasks = JSON.parse(localStorage.getItem('parkTillParkTasks')) || defaultTasks;
+            renderTasks();
+            updateAllProgress();
+            updateConnectionStatus('❌ Локальный режим');
+        }
+
+        // Инициализация Firebase
+        function initializeFirebase() {
+            try {
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+                tasksRef = database.ref('parkTillParkTasks');
+                
+                // Загружаем данные из Firebase
+                tasksRef.on('value', (snapshot) => {
+                    const firebaseTasks = snapshot.val();
+                    if (firebaseTasks && Array.isArray(firebaseTasks)) {
+                        savedTasks = firebaseTasks;
+                    } else {
+                        // Если данных нет, инициализируем базовыми задачами
+                        savedTasks = defaultTasks;
+                        saveTasksToFirebase();
+                    }
+                    renderTasks();
+                    updateAllProgress();
+                    updateConnectionStatus('✅ Синхронизация включена');
+                });
+
+                // Обработка ошибок подключения
+                tasksRef.on('error', (error) => {
+                    console.error('Firebase error:', error);
+                    updateConnectionStatus('❌ Ошибка подключения');
+                    initializeWithoutFirebase();
+                });
+
+            } catch (error) {
+                console.error('Ошибка инициализации Firebase:', error);
+                initializeWithoutFirebase();
+            }
+        }
+
+        // Сохранение в Firebase
+        function saveTasksToFirebase() {
+            if (tasksRef) {
+                tasksRef.set(savedTasks).catch(error => {
+                    console.error('Ошибка сохранения:', error);
+                    // Fallback на localStorage
+                    localStorage.setItem('parkTillParkTasks', JSON.stringify(savedTasks));
+                });
+            } else {
+                // Fallback на localStorage
+                localStorage.setItem('parkTillParkTasks', JSON.stringify(savedTasks));
+            }
+        }
+
+        // Обновление статуса подключения
+        function updateConnectionStatus(message) {
+            const statusElement = document.getElementById('connection-status');
+            statusElement.textContent = message;
+            
+            if (message.includes('❌')) {
+                statusElement.classList.add('disconnected');
+            } else {
+                statusElement.classList.remove('disconnected');
+            }
+        }
+
+        // Инициализация страницы
         function initializePage() {
-    loadTasksFromFirebase(); // ЗАМЕНИТЬ на Firebase
-    updateCountdown();
-    createMountainSteps();
-    setInterval(updateCountdown, 60000);
-}
-
+            updateConnectionStatus('🔄 Подключение...');
+            
+            // Пытаемся инициализировать Firebase
+            if (typeof firebase !== 'undefined') {
+                initializeFirebase();
+            } else {
+                initializeWithoutFirebase();
+            }
+            
+            updateCountdown();
+            createMountainSteps();
+            setInterval(updateCountdown, 60000);
+        }
 
         function renderTasks() {
             const taskContainer = document.getElementById('all-tasks');
@@ -620,51 +733,19 @@
             };
             return emojis[assignee] || '👤';
         }
+
         function toggleTask(taskId) {
-    const task = savedTasks.find(t => t.id === taskId);
-    if (task) {
-        task.completed = !task.completed;
-        saveTasksToFirebase(); // ЗАМЕНИТЬ localStorage на Firebase
-        renderTasks();
-        updateAllProgress();
-        
-        if (task.completed) {
-            showCelebration();
-        }
-    }
-            // Firebase конфигурация
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY", // Получить на firebase.google.com
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com/",
-    projectId: "YOUR_PROJECT"
-};
-
-// Инициализация Firebase
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-const tasksRef = database.ref('parkTillParkTasks');
-
-// Загружаем данные из Firebase
-function loadTasksFromFirebase() {
-    tasksRef.on('value', (snapshot) => {
-        const firebaseTasks = snapshot.val();
-        if (firebaseTasks) {
-            savedTasks = firebaseTasks;
-            renderTasks();
-            updateAllProgress();
-        }
-    });
-}
-
-// Сохраняем в Firebase
-function saveTasksToFirebase() {
-    tasksRef.set(savedTasks);
-}
-
-}
-
-        
+            const task = savedTasks.find(t => t.id === taskId);
+            if (task) {
+                task.completed = !task.completed;
+                saveTasksToFirebase();
+                renderTasks();
+                updateAllProgress();
+                
+                if (task.completed) {
+                    showCelebration();
+                }
+            }
         }
 
         function updateAllProgress() {
@@ -776,33 +857,30 @@ function saveTasksToFirebase() {
                 character.style.bottom = `${40 + ((currentStep - 1) * 25)}px`;
             }
         }
-        function updateCountdown() {
-    const eventDate = new Date(2025, 7, 15, 0, 0, 0); // месяц 7 = август
-    const now = new Date();
-    const difference = eventDate.getTime() - now.getTime();
-    
-    if (difference > 0) {
-        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        // секунды удалены
-        
-        document.getElementById('days').textContent = days.toString().padStart(2, '0');
-        document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
-        document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
-        // строка с секундами удалена
-        
-        document.getElementById('days-left').textContent = days;
-    } else {
-        document.getElementById('days').textContent = '00';
-        document.getElementById('hours').textContent = '00';
-        document.getElementById('minutes').textContent = '00';
-        // строка с секундами удалена
-        document.getElementById('days-left').textContent = 0;
-    }
-}
 
-        
+        function updateCountdown() {
+            const eventDate = new Date(2025, 7, 15, 0, 0, 0); // 15 августа 2025
+            const now = new Date();
+            const difference = eventDate.getTime() - now.getTime();
+            
+            if (difference > 0) {
+                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+                
+                document.getElementById('days').textContent = days.toString().padStart(2, '0');
+                document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
+                document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
+                
+                document.getElementById('days-left').textContent = days;
+            } else {
+                document.getElementById('days').textContent = '00';
+                document.getElementById('hours').textContent = '00';
+                document.getElementById('minutes').textContent = '00';
+                document.getElementById('days-left').textContent = 0;
+            }
+        }
+
         function showCelebration() {
             const celebration = document.getElementById('celebration');
             celebration.style.display = 'block';
